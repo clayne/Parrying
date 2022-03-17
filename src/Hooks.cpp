@@ -9,7 +9,10 @@ namespace Hooks
 
 		DebugAPI::Update();
 
+#ifdef DEBUG
 		draw_player_weapon();
+#endif  // DEBUG
+
 	}
 
 	void apply_hooks()

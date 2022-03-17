@@ -61,19 +61,37 @@ RE::TESObjectWEAP* get_weapon(RE::Actor* a, bool left)
 	return weap;
 }
 
+bool play_impact(RE::Actor* a)
+{
+	auto root = netimmerse_cast<RE::BSFadeNode*>(a->Get3D());
+	if (!root)
+		return false;
+	auto bone = netimmerse_cast<RE::NiNode*>(root->GetObjectByName("WEAPON"));
+	if (!bone)
+		return false;
+
+	float reach = FenixUtils::PlayerCharacter__get_reach(a) * 0.75f * 0.5f;
+	auto weaponDirection = RE::NiPoint3{ bone->world.rotate.entry[0][1], bone->world.rotate.entry[1][1], bone->world.rotate.entry[2][1] };
+	RE::NiPoint3 to = bone->world.translate + weaponDirection * reach;
+	RE::NiPoint3 P_V = { 0.0f, 0.0f, 0.0f };
+
+	return FenixUtils::play_impact(a, 0x0004BB52, &P_V, &to, bone);
+}
+
 namespace Control
 {
-	void parry(RE::Actor* attacker, RE::Actor* victim)
+	void parry(RE::Actor* attacker, RE::Actor* )
 	{
-		// TODO: play sound
+		FenixUtils::play_sound(attacker, 0x0003C73C);
+		SKSE::GetTaskInterface()->AddTask([attacker]() { play_impact(attacker); });
 
-		victim->NotifyAnimationGraph("recoilStop");
-		victim->NotifyAnimationGraph("AttackStop");
+		//victim->NotifyAnimationGraph("recoilStop");
+		//victim->NotifyAnimationGraph("AttackStop");
 		attacker->NotifyAnimationGraph("recoilStop");
 		attacker->NotifyAnimationGraph("AttackStop");
 
 		attacker->NotifyAnimationGraph("recoilLargeStart");
-		victim->NotifyAnimationGraph("recoilLargeStart");
+		//victim->NotifyAnimationGraph("recoilLargeStart");
 	}
 
 	bool is_attacking(RE::ATTACK_STATE_ENUM state_a)
@@ -89,15 +107,25 @@ namespace Control
 
 		float d = dist(attacker_from, attacker_to, victim_from, victim_to);
 
+#ifdef DEBUG
 		logger::info("d={}", d);
+
 		draw_line(attacker_from, attacker_to);
 		draw_line(victim_from, victim_to);
+#endif  // DEBUG
 
-		return d <= 100.0f;
+		return d <= 120.0f;
 	}
 
 	bool close_attack(RE::Actor* attacker, RE::Actor* victim) {
-		return is_attacking(attacker->GetAttackState()) && is_attacking(victim->GetAttackState()) && close_attack_(attacker, victim);
+		auto PI = 3.1415926f;
+		auto angle = abs(attacker->GetHeading(true) - victim->GetHeading(true));
+
+		if (angle > PI)
+			angle = 2 * PI - angle;
+
+		return is_attacking(attacker->GetAttackState()) && is_attacking(victim->GetAttackState()) && angle > PI * 0.75f &&
+		       close_attack_(attacker, victim);
 	}
 
 	bool OnHit(RE::Actor* attacker, RE::Actor* victim, char aleft)
